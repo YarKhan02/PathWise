@@ -4,12 +4,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	ginadapter "github.com/YarKhan02/pathwise/internal/adapters/gin"
-	"github.com/YarKhan02/pathwise/internal/analyzer"
-	"github.com/YarKhan02/pathwise/internal/authorization"
-	"github.com/YarKhan02/pathwise/internal/config"
-	"github.com/YarKhan02/pathwise/internal/findings"
-	"github.com/YarKhan02/pathwise/internal/loader"
+	ginadapter "github.com/YarKhan02/PathWise/internal/adapters/gin"
+	"github.com/YarKhan02/PathWise/internal/analyzer"
+	"github.com/YarKhan02/PathWise/internal/authorization"
+	"github.com/YarKhan02/PathWise/internal/config"
+	"github.com/YarKhan02/PathWise/internal/findings"
+	"github.com/YarKhan02/PathWise/internal/loader"
 	"golang.org/x/tools/go/ssa"
 )
 

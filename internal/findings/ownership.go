@@ -3,8 +3,8 @@ package findings
 import (
 	"fmt"
 
-	"github.com/YarKhan02/pathwise/internal/analyzer"
-	"github.com/YarKhan02/pathwise/internal/model"
+	"github.com/YarKhan02/PathWise/internal/analyzer"
+	"github.com/YarKhan02/PathWise/internal/model"
 )
 
 // OwnershipCheck reports the classic IDOR: a request-controlled value reaches a

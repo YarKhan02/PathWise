@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/YarKhan02/pathwise/internal/analyzer"
-	"github.com/YarKhan02/pathwise/internal/loader"
+	"github.com/YarKhan02/PathWise/internal/analyzer"
+	"github.com/YarKhan02/PathWise/internal/loader"
 	"golang.org/x/tools/go/ssa"
 )
 

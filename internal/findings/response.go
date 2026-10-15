@@ -8,8 +8,8 @@ import (
 
 	"golang.org/x/tools/go/ssa"
 
-	"github.com/YarKhan02/pathwise/internal/config"
-	"github.com/YarKhan02/pathwise/internal/model"
+	"github.com/YarKhan02/PathWise/internal/config"
+	"github.com/YarKhan02/PathWise/internal/model"
 )
 
 // ResponseScope reports a handler that serializes a field backed by a column

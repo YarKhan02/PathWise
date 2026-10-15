@@ -9,10 +9,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/YarKhan02/pathwise/internal/model"
-	"github.com/YarKhan02/pathwise/internal/project"
-	"github.com/YarKhan02/pathwise/internal/report"
-	"github.com/YarKhan02/pathwise/internal/storage/sqlite"
+	"github.com/YarKhan02/PathWise/internal/model"
+	"github.com/YarKhan02/PathWise/internal/project"
+	"github.com/YarKhan02/PathWise/internal/report"
+	"github.com/YarKhan02/PathWise/internal/storage/sqlite"
 )
 
 func newReportCommand(g *globalFlags) *cobra.Command {

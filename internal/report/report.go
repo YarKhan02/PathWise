@@ -7,7 +7,7 @@ package report
 import (
 	"sort"
 
-	"github.com/YarKhan02/pathwise/internal/model"
+	"github.com/YarKhan02/PathWise/internal/model"
 )
 
 // Report is the assembled, render-ready view of one scan.

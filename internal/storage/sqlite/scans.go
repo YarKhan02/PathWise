@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/YarKhan02/pathwise/internal/model"
+	"github.com/YarKhan02/PathWise/internal/model"
 )
 
 // SchemaSource records where schema facts came from. A finding resting on an

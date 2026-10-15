@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/YarKhan02/pathwise/internal/config"
-	"github.com/YarKhan02/pathwise/internal/model"
+	"github.com/YarKhan02/PathWise/internal/config"
+	"github.com/YarKhan02/PathWise/internal/model"
 )
 
 // TestDiscoverRoutesReportsBuildError pins the landmine behavior: when the

@@ -5,8 +5,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/YarKhan02/pathwise/internal/corpus"
-	"github.com/YarKhan02/pathwise/internal/schema"
+	"github.com/YarKhan02/PathWise/internal/corpus"
+	"github.com/YarKhan02/PathWise/internal/schema"
 )
 
 // TestReconstructMatchesCorpus checks the schema rebuilt from the corpus

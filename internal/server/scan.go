@@ -7,8 +7,8 @@ package server
 import (
 	"sort"
 
-	"github.com/YarKhan02/pathwise/internal/model"
-	"github.com/YarKhan02/pathwise/internal/report"
+	"github.com/YarKhan02/PathWise/internal/model"
+	"github.com/YarKhan02/PathWise/internal/report"
 )
 
 // Scan is the JSON contract the dashboard consumes. It is a projection of a

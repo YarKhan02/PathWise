@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/YarKhan02/pathwise/internal/analyzer"
-	"github.com/YarKhan02/pathwise/internal/config"
-	"github.com/YarKhan02/pathwise/internal/model"
+	"github.com/YarKhan02/PathWise/internal/analyzer"
+	"github.com/YarKhan02/PathWise/internal/config"
+	"github.com/YarKhan02/PathWise/internal/model"
 )
 
 // TenantFilter reports a read of a tenant-scoped table that carries no predicate

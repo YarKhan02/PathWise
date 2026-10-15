@@ -1,7 +1,7 @@
 package gin
 
 import (
-	"github.com/YarKhan02/pathwise/internal/model"
+	"github.com/YarKhan02/PathWise/internal/model"
 )
 
 // Facts converts a discovery result into the shared model's facts, tied to one

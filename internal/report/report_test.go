@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/YarKhan02/pathwise/internal/model"
-	"github.com/YarKhan02/pathwise/internal/report"
+	"github.com/YarKhan02/PathWise/internal/model"
+	"github.com/YarKhan02/PathWise/internal/report"
 )
 
 // TestBuildAndRender checks the projection joins roles, resources and

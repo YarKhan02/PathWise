@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	ginadapter "github.com/YarKhan02/pathwise/internal/adapters/gin"
-	"github.com/YarKhan02/pathwise/internal/corpus"
-	"github.com/YarKhan02/pathwise/internal/loader"
-	"github.com/YarKhan02/pathwise/internal/model"
+	ginadapter "github.com/YarKhan02/PathWise/internal/adapters/gin"
+	"github.com/YarKhan02/PathWise/internal/corpus"
+	"github.com/YarKhan02/PathWise/internal/loader"
+	"github.com/YarKhan02/PathWise/internal/model"
 )
 
 // corpusApp is the basic-gin app, resolved relative to this test file.

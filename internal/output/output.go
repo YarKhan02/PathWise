@@ -7,7 +7,7 @@ package output
 import (
 	"encoding/json"
 
-	"github.com/YarKhan02/pathwise/internal/model"
+	"github.com/YarKhan02/PathWise/internal/model"
 )
 
 // Report is the JSON envelope: the scan it came from and its findings.
@@ -71,7 +71,7 @@ func SARIF(project, scanID string, findings []model.Finding) ([]byte, error) {
 		Runs: []sarifRun{{
 			Tool: sarifTool{Driver: sarifDriver{
 				Name:           "PathWise",
-				InformationURI: "https://github.com/YarKhan02/pathwise",
+				InformationURI: "https://github.com/YarKhan02/PathWise",
 				Rules:          ruleList,
 			}},
 			Results:    results,

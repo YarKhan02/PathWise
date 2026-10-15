@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/YarKhan02/pathwise/internal/version"
+	"github.com/YarKhan02/PathWise/internal/version"
 )
 
 // globalFlags are shared by every subcommand.

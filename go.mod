@@ -1,4 +1,4 @@
-module github.com/YarKhan02/pathwise
+module github.com/YarKhan02/PathWise
 
 go 1.26.0
 

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/YarKhan02/pathwise/internal/report"
-	"github.com/YarKhan02/pathwise/internal/server"
+	"github.com/YarKhan02/PathWise/internal/report"
+	"github.com/YarKhan02/PathWise/internal/server"
 )
 
 func TestHandlerServesScanAndPage(t *testing.T) {

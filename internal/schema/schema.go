@@ -17,7 +17,7 @@
 package schema
 
 import (
-	"github.com/YarKhan02/pathwise/internal/model"
+	"github.com/YarKhan02/PathWise/internal/model"
 )
 
 // Schema is a database's structure as PathWise needs it. It is intentionally

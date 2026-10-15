@@ -21,3 +21,11 @@ dashboard/dist/
 .DS_Store
 
 frontend/node_modules
+
+test/*
+
+start.sh
+
+graphify-out/*
+
+CLAUDE.md

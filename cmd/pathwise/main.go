@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/YarKhan02/pathwise/internal/cli"
+	"github.com/YarKhan02/PathWise/internal/cli"
 )
 
 func main() {

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/YarKhan02/pathwise/internal/model"
-	"github.com/YarKhan02/pathwise/internal/output"
+	"github.com/YarKhan02/PathWise/internal/model"
+	"github.com/YarKhan02/PathWise/internal/output"
 )
 
 func sample() []model.Finding {

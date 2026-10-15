@@ -6,10 +6,10 @@ import (
 	"sort"
 	"testing"
 
-	ginadapter "github.com/YarKhan02/pathwise/internal/adapters/gin"
-	"github.com/YarKhan02/pathwise/internal/analyzer"
-	"github.com/YarKhan02/pathwise/internal/loader"
-	"github.com/YarKhan02/pathwise/internal/model"
+	ginadapter "github.com/YarKhan02/PathWise/internal/adapters/gin"
+	"github.com/YarKhan02/PathWise/internal/analyzer"
+	"github.com/YarKhan02/PathWise/internal/loader"
+	"github.com/YarKhan02/PathWise/internal/model"
 	"golang.org/x/tools/go/ssa"
 )
 

@@ -8,8 +8,8 @@ import (
 	"golang.org/x/tools/go/callgraph"
 	"golang.org/x/tools/go/ssa"
 
-	"github.com/YarKhan02/pathwise/internal/dataflow"
-	"github.com/YarKhan02/pathwise/internal/model"
+	"github.com/YarKhan02/PathWise/internal/dataflow"
+	"github.com/YarKhan02/PathWise/internal/model"
 )
 
 // DBAccess is the database access reachable from a set of root functions: which

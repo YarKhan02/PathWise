@@ -3,11 +3,11 @@ package findings_test
 import (
 	"testing"
 
-	"github.com/YarKhan02/pathwise/internal/analyzer"
-	"github.com/YarKhan02/pathwise/internal/config"
-	"github.com/YarKhan02/pathwise/internal/dataflow"
-	"github.com/YarKhan02/pathwise/internal/findings"
-	"github.com/YarKhan02/pathwise/internal/model"
+	"github.com/YarKhan02/PathWise/internal/analyzer"
+	"github.com/YarKhan02/PathWise/internal/config"
+	"github.com/YarKhan02/PathWise/internal/dataflow"
+	"github.com/YarKhan02/PathWise/internal/findings"
+	"github.com/YarKhan02/PathWise/internal/model"
 )
 
 // corpusTenancy mirrors basic-gin's .pathwise.yaml.

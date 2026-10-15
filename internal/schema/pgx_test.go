@@ -10,8 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/YarKhan02/pathwise/internal/corpus"
-	"github.com/YarKhan02/pathwise/internal/schema"
+	"github.com/YarKhan02/PathWise/internal/corpus"
+	"github.com/YarKhan02/PathWise/internal/schema"
 )
 
 // TestReadLiveMatchesCorpus applies the basic-gin migration to a real
