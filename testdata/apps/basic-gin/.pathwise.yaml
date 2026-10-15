@@ -1,0 +1,39 @@
+# Corpus app policy, mirroring what a real project would commit.
+#
+# Two of PathWise's four checks cannot fire without this file: nothing in the
+# schema says org_id discriminates tenants rather than being an ordinary
+# foreign key, and nothing says national_id is more sensitive than name.
+
+framework: gin
+migrations_dir: migrations
+
+tenancy:
+  column: org_id
+  tables:
+    - students
+    - batches
+    - users
+
+sensitive_columns:
+  - students.email
+  - students.national_id
+  - users.password_hash
+
+endpoint_scopes:
+  # The profile endpoint may return email, but not national_id. This is what
+  # scope-profile-national-id is measured against.
+  - endpoint: GET /students/:id/profile
+    allow_fields:
+      - students.email
+
+  - endpoint: GET /students/:id
+    allow_fields:
+      - students.email
+
+identity_funcs:
+  - main.CurrentUser
+
+auth_check_funcs:
+  - main.CanAccessStudent
+  - main.HasRole
+  - main.IsAdmin

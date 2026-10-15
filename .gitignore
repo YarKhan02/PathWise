@@ -1,0 +1,23 @@
+# Build output
+/pathwise
+*.exe
+
+# PathWise's own local store: analysis history is per-checkout, not shared.
+.pathwise/
+*.db
+*.db-shm
+*.db-wal
+
+# Project policy may carry connection details; commit a redacted example
+# instead and keep secrets in the environment. The corpus apps' policy files
+# are fixtures and must stay tracked.
+/.pathwise.yaml
+!testdata/apps/*/.pathwise.yaml
+
+# Dashboard build (phase 6)
+dashboard/node_modules/
+dashboard/dist/
+
+.DS_Store
+
+frontend/node_modules

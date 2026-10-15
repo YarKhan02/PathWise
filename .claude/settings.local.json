@@ -1,0 +1,5 @@
+{
+  "skillOverrides": {
+    "anthropic-skills:deep-research": "off"
+  }
+}

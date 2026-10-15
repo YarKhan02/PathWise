@@ -1,0 +1,182 @@
+{
+  "cmd/pathwise/main.go": {
+    "mtime": 1791957104.1852677,
+    "seen": 1792003404.455319,
+    "ast_hash": "03c756c7e0814e7e000ae1fb544e23d1",
+    "semantic_hash": "03c756c7e0814e7e000ae1fb544e23d1"
+  },
+  "go.mod": {
+    "mtime": 1791957103.6731873,
+    "seen": 1792003404.455324,
+    "ast_hash": "b587227369ee838830600dff333ec72e",
+    "semantic_hash": "b587227369ee838830600dff333ec72e"
+  },
+  "internal/cli/root.go": {
+    "mtime": 1791957105.2091727,
+    "seen": 1792003404.4553258,
+    "ast_hash": "1651ff44df9651d5f5aa76b47c38dab7",
+    "semantic_hash": "1651ff44df9651d5f5aa76b47c38dab7"
+  },
+  "internal/cli/scan.go": {
+    "mtime": 1791957105.723517,
+    "seen": 1792003404.455328,
+    "ast_hash": "e12f72bb849a13e046015f1d19bf19e8",
+    "semantic_hash": "e12f72bb849a13e046015f1d19bf19e8"
+  },
+  "internal/cli/stubs.go": {
+    "mtime": 1791957106.2336571,
+    "seen": 1792003404.455329,
+    "ast_hash": "8ee2c0748661733d1785acd67757fd18",
+    "semantic_hash": "8ee2c0748661733d1785acd67757fd18"
+  },
+  "internal/config/config.go": {
+    "mtime": 1791957106.7469673,
+    "seen": 1792003404.455331,
+    "ast_hash": "0d6145654655d0115ac446c14c69d0c9",
+    "semantic_hash": "0d6145654655d0115ac446c14c69d0c9"
+  },
+  "internal/corpus/corpus.go": {
+    "mtime": 1791957107.2594461,
+    "seen": 1792003404.455332,
+    "ast_hash": "b8d584a5fe34633cdb52dd68cf507ddb",
+    "semantic_hash": "b8d584a5fe34633cdb52dd68cf507ddb"
+  },
+  "internal/corpus/corpus_test.go": {
+    "mtime": 1791957107.7717192,
+    "seen": 1792003404.4553332,
+    "ast_hash": "eaa539da20b91ac1f18a97b106870740",
+    "semantic_hash": "eaa539da20b91ac1f18a97b106870740"
+  },
+  "internal/corpus/markers.go": {
+    "mtime": 1791957108.2836106,
+    "seen": 1792003404.455334,
+    "ast_hash": "c3e77a8100df52c41ee622eeb636047c",
+    "semantic_hash": "c3e77a8100df52c41ee622eeb636047c"
+  },
+  "internal/model/evidence.go": {
+    "mtime": 1791957108.7958593,
+    "seen": 1792003404.4553359,
+    "ast_hash": "42dfebc96b33c2b04add453bac315c08",
+    "semantic_hash": "42dfebc96b33c2b04add453bac315c08"
+  },
+  "internal/model/facts.go": {
+    "mtime": 1791957109.2401745,
+    "seen": 1792003404.455337,
+    "ast_hash": "bc2d33d859b99956dd29ef2e4d28903b",
+    "semantic_hash": "bc2d33d859b99956dd29ef2e4d28903b"
+  },
+  "internal/model/findings.go": {
+    "mtime": 1791957109.692287,
+    "seen": 1792003404.455338,
+    "ast_hash": "cbb0bfb0dbe55a1103f1cf4df5057c4e",
+    "semantic_hash": "cbb0bfb0dbe55a1103f1cf4df5057c4e"
+  },
+  "internal/model/graph.go": {
+    "mtime": 1791957110.1249983,
+    "seen": 1792003404.455339,
+    "ast_hash": "c5ac06b2790d9a53f1c50aaf75f7a54e",
+    "semantic_hash": "c5ac06b2790d9a53f1c50aaf75f7a54e"
+  },
+  "internal/model/model_test.go": {
+    "mtime": 1791957110.651676,
+    "seen": 1792003404.4553401,
+    "ast_hash": "7a82a8caa45ad23bea1c10c18c046e59",
+    "semantic_hash": "7a82a8caa45ad23bea1c10c18c046e59"
+  },
+  "internal/project/project.go": {
+    "mtime": 1791957111.1027598,
+    "seen": 1792003404.455342,
+    "ast_hash": "9ce6d97b54f30974442f355d0c805316",
+    "semantic_hash": "9ce6d97b54f30974442f355d0c805316"
+  },
+  "internal/storage/sqlite/migrations/0001_init.sql": {
+    "mtime": 1791957111.6642065,
+    "seen": 1792003404.455343,
+    "ast_hash": "bfab136bdcc6c3598438d3d42868a9e9",
+    "semantic_hash": "bfab136bdcc6c3598438d3d42868a9e9"
+  },
+  "internal/storage/sqlite/scans.go": {
+    "mtime": 1791957112.1157532,
+    "seen": 1792003404.4553442,
+    "ast_hash": "43d41d25af82db2940081aa078623352",
+    "semantic_hash": "43d41d25af82db2940081aa078623352"
+  },
+  "internal/storage/sqlite/sqlite_test.go": {
+    "mtime": 1791957112.6433399,
+    "seen": 1792003404.455345,
+    "ast_hash": "14254d5a0783b2f435ed6c79924257db",
+    "semantic_hash": "14254d5a0783b2f435ed6c79924257db"
+  },
+  "internal/storage/sqlite/store.go": {
+    "mtime": 1791957113.1987698,
+    "seen": 1792003404.4553459,
+    "ast_hash": "ed36473e01d5883736af8d75490018b6",
+    "semantic_hash": "ed36473e01d5883736af8d75490018b6"
+  },
+  "internal/version/version.go": {
+    "mtime": 1791957113.636001,
+    "seen": 1792003404.455347,
+    "ast_hash": "277f0493c7ec3da07fd679b451b0ebb9",
+    "semantic_hash": "277f0493c7ec3da07fd679b451b0ebb9"
+  },
+  "testdata/apps/basic-gin/auth.go": {
+    "mtime": 1791957114.5288002,
+    "seen": 1792003404.455348,
+    "ast_hash": "da0d1bc8c47c8a9c0a8920d5ab35aa71",
+    "semantic_hash": "da0d1bc8c47c8a9c0a8920d5ab35aa71"
+  },
+  "testdata/apps/basic-gin/go.mod": {
+    "mtime": 1791957115.5514555,
+    "seen": 1792003404.45535,
+    "ast_hash": "0cf3e0ebf7ad438b37722f98e1c3f2b3",
+    "semantic_hash": "0cf3e0ebf7ad438b37722f98e1c3f2b3"
+  },
+  "testdata/apps/basic-gin/handlers.go": {
+    "mtime": 1791957116.0678673,
+    "seen": 1792003404.455351,
+    "ast_hash": "3b7056a10b5c6acfcd9add3b0cc4c014",
+    "semantic_hash": "3b7056a10b5c6acfcd9add3b0cc4c014"
+  },
+  "testdata/apps/basic-gin/main.go": {
+    "mtime": 1791957116.5753565,
+    "seen": 1792003404.455352,
+    "ast_hash": "956806eba1642c6974ec11e2e70ee4ef",
+    "semantic_hash": "956806eba1642c6974ec11e2e70ee4ef"
+  },
+  "testdata/apps/basic-gin/migrations/0001_init.up.sql": {
+    "mtime": 1791957117.0908992,
+    "seen": 1792003404.4553542,
+    "ast_hash": "502cacf991f5a53b85d1430fcab92f95",
+    "semantic_hash": "502cacf991f5a53b85d1430fcab92f95"
+  },
+  "testdata/apps/basic-gin/store.go": {
+    "mtime": 1791957117.6013625,
+    "seen": 1792003404.455355,
+    "ast_hash": "6f7b51402a3b49b15701fb711ddbfc3d",
+    "semantic_hash": "6f7b51402a3b49b15701fb711ddbfc3d"
+  },
+  "CLAUDE.md": {
+    "mtime": 1792002348.321923,
+    "seen": 1792003404.455356,
+    "ast_hash": "fdf9060125d547ebb0f7d7ddd69932a9",
+    "semantic_hash": "fdf9060125d547ebb0f7d7ddd69932a9"
+  },
+  "configs/pathwise.example.yaml": {
+    "mtime": 1791957104.6990561,
+    "seen": 1792003404.4553568,
+    "ast_hash": "fe2cb257ada39adf3ac8a7bc9e28fb63",
+    "semantic_hash": "fe2cb257ada39adf3ac8a7bc9e28fb63"
+  },
+  "testdata/apps/basic-gin/.pathwise.yaml": {
+    "mtime": 1791957114.081313,
+    "seen": 1792003404.455358,
+    "ast_hash": "61ee7fdc505e1ed4b66430ec8c503ff2",
+    "semantic_hash": "61ee7fdc505e1ed4b66430ec8c503ff2"
+  },
+  "testdata/apps/basic-gin/expected.yaml": {
+    "mtime": 1791957115.0443487,
+    "seen": 1792003404.455359,
+    "ast_hash": "a24d14e5a924e86c2dd368aab5270d96",
+    "semantic_hash": "a24d14e5a924e86c2dd368aab5270d96"
+  }
+}

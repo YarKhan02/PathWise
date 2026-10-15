@@ -1,0 +1,39 @@
+import { useEffect, useState } from "react";
+import type { Scan } from "./types";
+
+export type Load<T> =
+  | { state: "loading" }
+  | { state: "error"; error: string }
+  | { state: "ready"; data: T };
+
+// useScan fetches the current scan from the local server once. There is no
+// silent fallback to fixtures: a failed request surfaces as an error state the
+// UI shows plainly, because fake scan data would be worse than none.
+export function useScan(): Load<Scan> {
+  const [load, setLoad] = useState<Load<Scan>>({ state: "loading" });
+
+  useEffect(() => {
+    let live = true;
+    fetch("api/scan")
+      .then((r) => {
+        if (!r.ok) throw new Error(`server returned ${r.status}`);
+        return r.json();
+      })
+      .then((data: Scan) => live && setLoad({ state: "ready", data }))
+      .catch((e: unknown) =>
+        live && setLoad({ state: "error", error: e instanceof Error ? e.message : String(e) }),
+      );
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  return load;
+}
+
+// roleColorVar maps a role to one of the validated categorical palette slots,
+// by its index in the scan's sorted role list, so color follows the role.
+export function roleColorVar(role: string, roles: string[]): string {
+  const i = roles.indexOf(role);
+  return i >= 0 && i < 8 ? `var(--role-${i})` : "var(--muted)";
+}

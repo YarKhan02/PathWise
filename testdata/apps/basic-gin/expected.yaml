@@ -1,0 +1,162 @@
+app: basic-gin
+framework: gin
+query_layer: database/sql
+description: >
+  Gin + database/sql application seeding one instance of each finding kind,
+  plus negative controls. The known answers below are what Phase 1 through
+  Phase 3 are measured against; each id is anchored to a pathwise: marker
+  comment in the source.
+
+routes:
+  - method: POST
+    pattern: /login
+    handler: main.Login
+    middleware: []
+
+  - method: GET
+    pattern: /students/:id
+    handler: main.GetStudent
+    middleware: [main.RequireAuth]
+
+  - method: GET
+    pattern: /students/:id/safe
+    handler: main.GetStudentSafe
+    middleware: [main.RequireAuth]
+
+  - method: GET
+    pattern: /students/:id/profile
+    handler: main.GetStudentProfile
+    middleware: [main.RequireAuth]
+
+  - method: GET
+    pattern: /search/students
+    handler: main.SearchStudents
+    middleware: [main.RequireAuth]
+
+  - method: GET
+    pattern: /batches
+    handler: main.ListBatches
+    middleware: [main.RequireAuth]
+
+  - method: GET
+    pattern: /dashboard
+    handler: main.TeacherDashboard
+    middleware: [main.RequireAuth]
+
+  - method: GET
+    pattern: /admin/reports
+    handler: main.AdminReport
+    middleware: [main.RequireAuth, main.RequireRole]
+
+schema:
+  tables:
+    organizations:
+      columns: [id, name]
+      primary_key: [id]
+    users:
+      columns: [id, org_id, email, password_hash, role]
+      primary_key: [id]
+    batches:
+      columns: [id, org_id, name]
+      primary_key: [id]
+    students:
+      columns: [id, org_id, batch_id, name, email, national_id]
+      primary_key: [id]
+    sessions:
+      columns: [id, user_id, token, expires_at]
+      primary_key: [id]
+
+  foreign_keys:
+    - from: users.org_id
+      to: organizations.id
+    - from: batches.org_id
+      to: organizations.id
+    - from: students.org_id
+      to: organizations.id
+    - from: students.batch_id
+      to: batches.id
+    - from: sessions.user_id
+      to: users.id
+
+expected_findings:
+  - id: idor-get-student
+    kind: missing_ownership_check
+    endpoint: GET /students/{id}
+    function: main.GetStudent
+    requires_config: false
+    why: >
+      c.Param("id") is request-derived and reaches the primary-key predicate
+      of studentByID. No identity-derived predicate constrains the query and
+      no ownership check dominates the c.JSON write, so any authenticated
+      caller reads any student row.
+
+  - id: role-discarded-admin-report
+    kind: role_check_unenforced
+    endpoint: GET /admin/reports
+    function: main.AdminReport
+    requires_config: false
+    why: >
+      IsAdmin(user) is called and its result assigned to the blank
+      identifier, so no branch depends on it. The call site exists but
+      enforces nothing. Attribution must be to the handler's dead check, not
+      to the endpoint being unprotected — the admin group's RequireRole
+      middleware does guard the route.
+
+  - id: role-nondominating-dashboard
+    kind: role_check_unenforced
+    endpoint: GET /dashboard
+    function: main.TeacherDashboard
+    requires_config: false
+    why: >
+      HasRole is branched on, but only inside the strict=1 conditional. The
+      abort does not dominate the c.JSON write, so the response is reachable
+      without the role ever being evaluated. Detecting this requires
+      dominance analysis; looking for discarded return values is not enough.
+
+  - id: tenant-list-batches
+    kind: missing_tenant_filter
+    endpoint: GET /batches
+    function: main.ListBatches
+    requires_config: true
+    why: >
+      allBatches selects from batches with no predicate on org_id, the
+      declared tenant discriminator. Fires only when tenancy.column is
+      configured; without config this must be an unverified fact naming
+      missing_config, never a silent pass.
+
+  - id: scope-profile-national-id
+    kind: response_field_exceeds_scope
+    endpoint: GET /students/{id}/profile
+    function: main.GetStudentProfile
+    requires_config: true
+    why: >
+      The handler serializes StudentProfile, whose national_id field is
+      backed by students.national_id, declared sensitive. The endpoint's
+      declared scope permits email but not national_id. Ownership is enforced
+      correctly here, so this must be reported as an over-broad response and
+      not as an authorization failure.
+
+expected_unresolved:
+  - id: dynamic-sql-search
+    reason: dynamic_sql
+    function: main.SearchStudents
+    why: >
+      Query text is assembled with fmt.Sprintf, so the predicate set is not
+      recoverable at the call site. The correct output is an unverified fact
+      naming dynamic_sql. A finding here is a false positive; silence here is
+      a coverage gap that would hide a real injection-adjacent risk.
+
+expected_safe:
+  - id: ownership-enforced
+    function: main.GetStudentSafe
+    why: >
+      CanAccessStudent is branched on and its failure branch aborts. The
+      abort dominates every path to the c.JSON write, so the check is
+      genuinely enforced.
+
+  - id: login-public-by-design
+    function: main.Login
+    why: >
+      Unauthenticated by design. There is no principal to check, so a missing
+      authorization check must not be reported. An analyzer that flags every
+      handler without an auth check will fail here.

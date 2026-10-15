@@ -1,0 +1,1 @@
+{"nodes": [{"id": "$graphify-root$_internal_cli_testdata_broken_broken_go", "label": "broken.go", "file_type": "code", "source_file": "internal/cli/testdata/broken/broken.go", "source_location": "L1"}], "edges": [], "raw_calls": [], "go_imports": {}, "go_type_table": {"path": "$graphify-root$/internal/cli/testdata/broken/broken.go", "table": {}}}

@@ -1,0 +1,249 @@
+// Package report turns a scan's stored facts into a human view of the one
+// question the tool exists to answer: which identities can reach which
+// resources through which endpoints. It is a projection over facts, so it can
+// be re-rendered at any time without re-analyzing the project.
+package report
+
+import (
+	"sort"
+
+	"github.com/YarKhan02/pathwise/internal/model"
+)
+
+// Report is the assembled, render-ready view of one scan.
+type Report struct {
+	Project      string
+	ScanID       string
+	SchemaSource string
+	GeneratedAt  string
+
+	Endpoints []Endpoint
+	Roles     []string // every role demanded by a gate, sorted
+	Tables    []string // every table reached, sorted
+
+	RouteCount      int
+	TableCount      int
+	RoleCount       int
+	FindingCount    int
+	UnresolvedCount int
+}
+
+// Endpoint is one route and everything known about what it exposes.
+type Endpoint struct {
+	Method      string
+	Path        string
+	Subject     string
+	Handler     string
+	HandlerFile string
+	HandlerLine int
+	Roles       []string
+	Middleware  []MiddlewareRef
+	Checks      []CheckRef
+	Resources   []Resource
+	Unresolved  bool
+	Findings    []model.Finding
+}
+
+// MiddlewareRef is one middleware in an endpoint's chain, with the constant
+// arguments it was built with (RequireRole("admin") → Args ["admin"]).
+type MiddlewareRef struct {
+	Name string
+	Args []string
+}
+
+// CheckRef is an authorization check call found in the handler and the verdict
+// on whether it gates the response (enforced / discarded / non_dominating / …).
+type CheckRef struct {
+	Func        string
+	Enforcement string
+	File        string
+	Line        int
+}
+
+// Resource is a table an endpoint reaches and the operations it performs on it.
+type Resource struct {
+	Table      string
+	Operations []string
+}
+
+// Build assembles a report from a scan's route, middleware and query facts plus
+// its findings. It takes facts rather than the store so it stays a pure
+// projection, testable without a database.
+func Build(project, scanID, schemaSource, generatedAt string,
+	routes, middleware, queries, authChecks []model.Fact, findings []model.Finding) *Report {
+
+	r := &Report{Project: project, ScanID: scanID, SchemaSource: schemaSource, GeneratedAt: generatedAt}
+
+	// Endpoints, keyed by route subject, from the real route facts (those
+	// carrying a method attribute; build-error and miss facts have none).
+	bySubject := map[string]*Endpoint{}
+	for _, f := range routes {
+		method := attrStr(f.Attrs, "method")
+		if method == "" {
+			continue
+		}
+		ep := &Endpoint{
+			Method:  method,
+			Path:    attrStr(f.Attrs, "pattern"),
+			Subject: f.Subject,
+			Handler: attrStr(f.Attrs, "handler"),
+		}
+		if len(f.Evidence.Source) > 0 {
+			ep.HandlerFile = f.Evidence.Source[0].File
+			ep.HandlerLine = f.Evidence.Source[0].StartLine
+		}
+		bySubject[f.Subject] = ep
+	}
+
+	// Roles and the middleware chain come from the gate facts. Each middleware
+	// fact carries its order in the chain and the constant args it was built
+	// with; a role is such an arg (RequireRole("admin")).
+	roleSet := map[string]bool{}
+	mwByOrder := map[*Endpoint]map[int]MiddlewareRef{}
+	for _, f := range middleware {
+		ep := bySubject[attrStr(f.Attrs, "route")]
+		if ep == nil {
+			continue
+		}
+		args := attrStrings(f.Attrs, "args")
+		if mwByOrder[ep] == nil {
+			mwByOrder[ep] = map[int]MiddlewareRef{}
+		}
+		mwByOrder[ep][attrInt(f.Attrs, "order")] = MiddlewareRef{Name: f.Subject, Args: args}
+		for _, role := range args {
+			if !contains(ep.Roles, role) {
+				ep.Roles = append(ep.Roles, role)
+			}
+			roleSet[role] = true
+		}
+	}
+	for ep, byOrder := range mwByOrder {
+		for i := 0; i < len(byOrder); i++ {
+			if m, ok := byOrder[i]; ok {
+				ep.Middleware = append(ep.Middleware, m)
+			}
+		}
+	}
+
+	// Authorization checks and their enforcement verdict.
+	for _, f := range authChecks {
+		ep := bySubject[attrStr(f.Attrs, "endpoint")]
+		if ep == nil {
+			continue
+		}
+		ref := CheckRef{Func: attrStr(f.Attrs, "check"), Enforcement: attrStr(f.Attrs, "enforcement")}
+		if len(f.Evidence.Source) > 0 {
+			ref.File = f.Evidence.Source[0].File
+			ref.Line = f.Evidence.Source[0].StartLine
+		}
+		ep.Checks = append(ep.Checks, ref)
+	}
+
+	// Resources (and unresolved queries) come from the data-access facts.
+	tableSet := map[string]bool{}
+	for _, f := range queries {
+		ep := bySubject[attrStr(f.Attrs, "endpoint")]
+		if ep == nil {
+			continue
+		}
+		if f.Evidence.Status == model.StatusUnverified {
+			ep.Unresolved = true
+			r.UnresolvedCount++
+			continue
+		}
+		table := attrStr(f.Attrs, "table")
+		if table == "" {
+			continue
+		}
+		ep.Resources = append(ep.Resources, Resource{Table: table, Operations: attrStrings(f.Attrs, "operations")})
+		tableSet[table] = true
+	}
+
+	for _, f := range findings {
+		if ep := bySubject[f.Endpoint]; ep != nil {
+			ep.Findings = append(ep.Findings, f)
+		}
+	}
+
+	for _, ep := range bySubject {
+		sort.Strings(ep.Roles)
+		sort.Slice(ep.Resources, func(i, j int) bool { return ep.Resources[i].Table < ep.Resources[j].Table })
+		sort.Slice(ep.Checks, func(i, j int) bool { return ep.Checks[i].Func < ep.Checks[j].Func })
+		r.Endpoints = append(r.Endpoints, *ep)
+	}
+	sort.Slice(r.Endpoints, func(i, j int) bool { return r.Endpoints[i].Subject < r.Endpoints[j].Subject })
+
+	r.Roles = sortedKeys(roleSet)
+	r.Tables = sortedKeys(tableSet)
+	r.RouteCount = len(r.Endpoints)
+	r.TableCount = len(r.Tables)
+	r.RoleCount = len(r.Roles)
+	r.FindingCount = len(findings)
+	return r
+}
+
+func attrStr(attrs map[string]any, key string) string {
+	if attrs == nil {
+		return ""
+	}
+	if s, ok := attrs[key].(string); ok {
+		return s
+	}
+	return ""
+}
+
+// attrInt reads an integer attribute, tolerating the float64 a JSON round-trip
+// turns it into.
+func attrInt(attrs map[string]any, key string) int {
+	if attrs == nil {
+		return 0
+	}
+	switch v := attrs[key].(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	}
+	return 0
+}
+
+// attrStrings reads a []string attribute that round-tripped through JSON as
+// []any of strings.
+func attrStrings(attrs map[string]any, key string) []string {
+	if attrs == nil {
+		return nil
+	}
+	switch v := attrs[key].(type) {
+	case []string:
+		return v
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, e := range v {
+			if s, ok := e.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+func contains(xs []string, x string) bool {
+	for _, v := range xs {
+		if v == x {
+			return true
+		}
+	}
+	return false
+}
+
+func sortedKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
