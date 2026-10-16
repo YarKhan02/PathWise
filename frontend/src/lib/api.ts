@@ -1,5 +1,23 @@
 import { useEffect, useState } from "react";
-import type { Scan } from "./types";
+import type { Scan, RuntimeTest } from "./types";
+
+// runTests asks the local server to exercise the running app as the supplied
+// identities and returns the outcomes. Tokens are sent to localhost only, used
+// in memory for the run, and never persisted — the same contract as the
+// `pathwise test` CLI.
+export async function runTests(req: {
+  baseUrl: string;
+  identities: { role: string; token: string }[];
+  endpoints: string[];
+}): Promise<RuntimeTest[]> {
+  const r = await fetch("api/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  if (!r.ok) throw new Error((await r.text()) || `server returned ${r.status}`);
+  return r.json();
+}
 
 export type Load<T> =
   | { state: "loading" }

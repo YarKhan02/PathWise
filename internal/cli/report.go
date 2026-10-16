@@ -117,11 +117,27 @@ func loadReport(ctx context.Context, store *sqlite.Store, scan *sqlite.Scan, pro
 	if err != nil {
 		return nil, err
 	}
+	tables, err := store.FactsByKind(ctx, scan.ID, model.FactTable)
+	if err != nil {
+		return nil, err
+	}
+	columns, err := store.FactsByKind(ctx, scan.ID, model.FactColumn)
+	if err != nil {
+		return nil, err
+	}
+	responses, err := store.FactsByKind(ctx, scan.ID, model.FactResponseField)
+	if err != nil {
+		return nil, err
+	}
+	foreignKeys, err := store.FactsByKind(ctx, scan.ID, model.FactForeignKey)
+	if err != nil {
+		return nil, err
+	}
 	findings, err := store.Findings(ctx, scan.ID)
 	if err != nil {
 		return nil, err
 	}
 	return report.Build(projectName, scan.ID, string(scan.SchemaSource),
 		time.Now().UTC().Format("2006-01-02 15:04 UTC"),
-		routes, middleware, queries, authChecks, findings), nil
+		routes, middleware, queries, authChecks, tables, columns, responses, foreignKeys, findings), nil
 }

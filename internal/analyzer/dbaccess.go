@@ -4,6 +4,7 @@ import (
 	"go/constant"
 	"go/token"
 	"sort"
+	"strings"
 
 	"golang.org/x/tools/go/callgraph"
 	"golang.org/x/tools/go/ssa"
@@ -106,6 +107,129 @@ func AnalyzeReachableDB(prog *ssa.Program, cg *callgraph.Graph, roots []*ssa.Fun
 	}
 
 	return acc
+}
+
+// TableColumns is the per-table field access an endpoint performs, with honest
+// markers where the exact columns cannot be known. Read/Filter/Write are the
+// columns projected, constrained in WHERE, and written. Star means a `SELECT *`
+// read the table (so the read set is really "all columns"); Ambiguous means a
+// multi-table query referenced columns that could not be pinned to this table.
+type TableColumns struct {
+	Read      []string
+	Filter    []string
+	Write     []string
+	Star      bool
+	Ambiguous bool
+}
+
+// ColumnsByTable attributes each reached query's columns to the tables it
+// touches. Attribution is deliberately conservative: a single-table query's
+// columns all belong to that table, but in a multi-table query only a column
+// whose qualifier is exactly a table name is attributed — a bare or
+// alias-qualified column cannot be pinned without alias resolution, so it marks
+// the query's tables Ambiguous rather than being attributed to a guess. This
+// matches the project's rule that a name match is not evidence.
+func ColumnsByTable(acc DBAccess) map[string]*TableColumns {
+	out := map[string]*TableColumns{}
+	get := func(t string) *TableColumns {
+		if out[t] == nil {
+			out[t] = &TableColumns{}
+		}
+		return out[t]
+	}
+
+	for _, rq := range acc.Queries {
+		q := rq.Query
+		if q == nil {
+			continue
+		}
+		tables := lowerUnique(q.Tables)
+		if len(tables) == 0 {
+			continue
+		}
+		single := ""
+		if len(tables) == 1 {
+			single = tables[0]
+		}
+		tableSet := map[string]bool{}
+		for _, t := range tables {
+			tableSet[t] = true
+		}
+
+		// place attributes a column to the right table, or marks every touched
+		// table ambiguous when it cannot be pinned.
+		place := func(ref dataflowRef, field func(*TableColumns) *[]string) {
+			switch {
+			case single != "":
+				addCol(field(get(single)), ref.Name)
+			case ref.Table != "" && tableSet[ref.Table]:
+				addCol(field(get(ref.Table)), ref.Name)
+			default:
+				for _, t := range tables {
+					get(t).Ambiguous = true
+				}
+			}
+		}
+
+		for _, r := range q.ReadColumns {
+			place(dataflowRef{r.Table, r.Name}, func(tc *TableColumns) *[]string { return &tc.Read })
+		}
+		for _, w := range q.WriteColumns {
+			place(dataflowRef{w.Table, w.Name}, func(tc *TableColumns) *[]string { return &tc.Write })
+		}
+		for _, c := range q.WhereColumns {
+			place(dataflowRef{"", c}, func(tc *TableColumns) *[]string { return &tc.Filter })
+		}
+		if q.Star {
+			if single != "" {
+				get(single).Star = true
+			} else {
+				for _, t := range tables {
+					get(t).Ambiguous = true
+				}
+			}
+		}
+	}
+
+	for _, tc := range out {
+		sort.Strings(tc.Read)
+		sort.Strings(tc.Filter)
+		sort.Strings(tc.Write)
+	}
+	return out
+}
+
+// dataflowRef mirrors a dataflow.ColumnRef without importing its shape into the
+// signature above.
+type dataflowRef struct {
+	Table string
+	Name  string
+}
+
+func addCol(set *[]string, col string) {
+	if col == "" {
+		return
+	}
+	for _, c := range *set {
+		if c == col {
+			return
+		}
+	}
+	*set = append(*set, col)
+}
+
+func lowerUnique(xs []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, x := range xs {
+		l := strings.ToLower(x)
+		if l == "" || seen[l] {
+			continue
+		}
+		seen[l] = true
+		out = append(out, l)
+	}
+	return out
 }
 
 func (a *DBAccess) addOp(table, op string) {

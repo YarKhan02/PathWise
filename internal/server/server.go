@@ -11,27 +11,100 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
 //go:embed all:assets
 var assets embed.FS
 
+// TestRunner executes a runtime verification requested from the dashboard and
+// returns its outcomes. It is injected by the CLI so the server stays free of
+// the storage and runtime packages. The tokens in the request live only for the
+// duration of the call and are never serialized back to the client.
+type TestRunner func(ctx context.Context, req TestRequest) ([]RuntimeTest, error)
+
+// HistoryFn returns every recorded runtime run for the project, newest first.
+// It is injected so the store stays the source of truth: the server re-reads it
+// after each run rather than reconstructing history in memory.
+type HistoryFn func(ctx context.Context) ([]TestRun, error)
+
+// TestRequest is the dashboard's run form: where the running app is, who to
+// test as, and exactly which endpoints to run as "METHOD /path" strings. The
+// set is explicit — a non-GET endpoint present here is its own opt-in; one
+// absent is simply not run.
+type TestRequest struct {
+	BaseURL    string         `json:"baseUrl"`
+	Identities []TestIdentity `json:"identities"`
+	Endpoints  []string       `json:"endpoints"` // "METHOD /path" strings to run
+}
+
+// TestIdentity is one principal to test as. Token is a credential, accepted
+// only in a request body and never written back out.
+type TestIdentity struct {
+	Role  string `json:"role"`
+	Token string `json:"token"`
+}
+
 // Handler returns the dashboard's HTTP handler: the scan as JSON at /api/scan,
 // and the embedded single-page app everywhere else. Unknown non-API paths fall
 // back to index.html so the app's client-side routes resolve on a hard refresh.
-func Handler(scan Scan) http.Handler {
+//
+// When runner is non-nil, POST /api/test runs a runtime verification and folds
+// its results into the served scan, so a refresh shows the latest run.
+func Handler(scan Scan, runner TestRunner, history HistoryFn) http.Handler {
 	ui, err := fs.Sub(assets, "assets")
 	if err != nil {
 		panic(err) // the embed path is a constant; it cannot fail at runtime
 	}
 	fileServer := http.FileServer(http.FS(ui))
 
+	// state is the served scan; POST /api/test replaces its runtime results, so
+	// both handlers share it under the lock.
+	state := &scan
+	var mu sync.Mutex
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/scan", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(scan)
+		mu.Lock()
+		defer mu.Unlock()
+		_ = json.NewEncoder(w).Encode(state)
 	})
+	if runner != nil {
+		mux.HandleFunc("/api/test", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "use POST", http.StatusMethodNotAllowed)
+				return
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // cap the request at 1 MiB
+			var req TestRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			rows, err := runner(r.Context(), req)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			// Persisted by the runner, so refresh the durable history from the
+			// store. The latest run becomes the current picture. Response-body
+			// previews are kept only in this immediate response, never re-served
+			// from /api/scan (a body can carry sensitive data).
+			mu.Lock()
+			state.RuntimeTests = stripBodies(rows)
+			state.RuntimeTestedAt = time.Now().UTC().Format(time.RFC3339)
+			if history != nil {
+				if h, herr := history(r.Context()); herr == nil {
+					state.History = h
+				}
+			}
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(rows)
+		})
+	}
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(r.URL.Path, "/")
 		if name == "" {
@@ -45,6 +118,17 @@ func Handler(scan Scan) http.Handler {
 		serveIndex(w, ui)
 	})
 	return mux
+}
+
+// stripBodies returns the runtime results without their response-body previews,
+// for the in-memory copy that /api/scan re-serves on later reloads.
+func stripBodies(rows []RuntimeTest) []RuntimeTest {
+	out := make([]RuntimeTest, len(rows))
+	for i, r := range rows {
+		r.Body = ""
+		out[i] = r
+	}
+	return out
 }
 
 // serveIndex writes the SPA entrypoint, for a client-side route with no file.
@@ -62,8 +146,8 @@ func serveIndex(w http.ResponseWriter, ui fs.FS) {
 // Serve runs the dashboard on addr until ctx is cancelled, then shuts down
 // cleanly. It binds before reporting the URL so the caller can print a link the
 // user can actually open.
-func Serve(ctx context.Context, addr string, scan Scan, onReady func(url string)) error {
-	srv := &http.Server{Handler: Handler(scan)}
+func Serve(ctx context.Context, addr string, scan Scan, runner TestRunner, history HistoryFn, onReady func(url string)) error {
+	srv := &http.Server{Handler: Handler(scan, runner, history)}
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {

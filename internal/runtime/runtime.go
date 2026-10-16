@@ -13,10 +13,16 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
 )
+
+// maxBodyCapture bounds how much of a response body is read back for the
+// dashboard. It is a preview of what the endpoint returned (the evidence of a
+// leak on a divergent result), not a full capture, and it is never persisted.
+const maxBodyCapture = 8 << 10 // 8 KiB
 
 // Identity is a principal to test as. Role is the label the scan's role gates
 // are compared against; Token is sent as a bearer credential and never stored.
@@ -71,6 +77,10 @@ type Result struct {
 	Status  int     `json:"status"`
 	Outcome Outcome `json:"outcome"`
 	Detail  string  `json:"detail"`
+	// Body is a capped preview of the response the app returned — the data a
+	// divergent result actually leaked. It is shown live and never persisted,
+	// because a response body can carry sensitive data.
+	Body string `json:"body,omitempty"`
 }
 
 // Plan builds the scenarios for a set of endpoints and identities. A non-GET
@@ -154,8 +164,10 @@ func Run(ctx context.Context, baseURL string, scenarios []Scenario, client *http
 			out = append(out, r)
 			continue
 		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxBodyCapture))
 		resp.Body.Close()
 		r.Status = resp.StatusCode
+		r.Body = string(body)
 		r.Outcome, r.Detail = classify(s.ExpectAllowed, resp.StatusCode)
 		out = append(out, r)
 	}

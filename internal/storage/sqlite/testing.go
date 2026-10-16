@@ -144,6 +144,62 @@ func (s *Store) LatestTestResults(ctx context.Context, scanID string) ([]StoredT
 	return out, rows.Err()
 }
 
+// StoredRun is one recorded runtime run (a batch sharing an executed_at) with
+// its results and the scan it tested — the unit of the dashboard's run history.
+type StoredRun struct {
+	ScanID      string
+	ExecutedAt  string
+	GitRevision string
+	Results     []StoredTestResult
+}
+
+// AllTestRuns returns every runtime run recorded for a project, newest first,
+// each grouped into its batch. Runs are append-only, so this is the full history
+// across every scan of the checkout — a re-scan never drops earlier runs. Bodies
+// are never stored, so none appear here.
+func (s *Store) AllTestRuns(ctx context.Context, projectID string) ([]StoredRun, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT ts.scan_id, tr.executed_at, sc.git_revision,
+		        ts.endpoint, ts.identity_ref, ts.expectation, ts.safety_class,
+		        tr.status_code, tr.outcome, tr.limitation
+		 FROM test_runs tr
+		 JOIN test_scenarios ts ON tr.scenario_id = ts.id
+		 JOIN scans sc ON ts.scan_id = sc.id
+		 WHERE sc.project_id = ?
+		 ORDER BY tr.executed_at DESC, ts.endpoint, ts.identity_ref`,
+		projectID)
+	if err != nil {
+		return nil, fmt.Errorf("query run history: %w", err)
+	}
+	defer rows.Close()
+
+	var out []StoredRun
+	for rows.Next() {
+		var (
+			scanID, executedAt, rev, endpoint string
+			r                                 StoredTestResult
+			status                            sql.NullInt64
+		)
+		if err := rows.Scan(&scanID, &executedAt, &rev, &endpoint, &r.IdentityRole,
+			&r.Expectation, &r.SafetyClass, &status, &r.Outcome, &r.Detail); err != nil {
+			return nil, err
+		}
+		r.ScanID = scanID
+		r.ExecutedAt = executedAt
+		r.Method, r.Path = splitEndpoint(endpoint)
+		if status.Valid {
+			r.StatusCode = int(status.Int64)
+		}
+		// Rows are ordered by executed_at desc, so a new (scan, time) pair starts
+		// a new batch.
+		if n := len(out); n == 0 || out[n-1].ScanID != scanID || out[n-1].ExecutedAt != executedAt {
+			out = append(out, StoredRun{ScanID: scanID, ExecutedAt: executedAt, GitRevision: rev})
+		}
+		out[len(out)-1].Results = append(out[len(out)-1].Results, r)
+	}
+	return out, rows.Err()
+}
+
 // splitEndpoint reverses TestResult.Endpoint ("METHOD /path").
 func splitEndpoint(ep string) (method, path string) {
 	for i := 0; i < len(ep); i++ {

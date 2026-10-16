@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -31,6 +34,7 @@ func newScanCommand(g *globalFlags) *cobra.Command {
 		allowNoDB      bool
 		migrationsFlag string
 		format         string
+		addr           string
 	)
 
 	cmd := &cobra.Command{
@@ -47,7 +51,7 @@ fact inferred rather than confirmed; pass --allow-no-db to accept that.
 With --format json or sarif, scan prints the findings in that format to stdout
 instead of the human summary, for piping into CI.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runScan(cmd.Context(), cmd, g, dbURL, allowNoDB, migrationsFlag, format)
+			return runScan(cmd.Context(), cmd, g, dbURL, allowNoDB, migrationsFlag, format, addr)
 		},
 	}
 
@@ -59,12 +63,14 @@ instead of the human summary, for piping into CI.`,
 	f.StringVar(&migrationsFlag, "migrations", "",
 		"directory of golang-migrate SQL files (overrides .pathwise.yaml)")
 	f.StringVar(&format, "format", "text", "output format: text | json | sarif")
+	f.StringVar(&addr, "addr", "127.0.0.1:7777",
+		"listen address for the dashboard spun up after a text-format scan")
 
 	return cmd
 }
 
 func runScan(ctx context.Context, cmd *cobra.Command, g *globalFlags,
-	dbURL string, allowNoDB bool, migrationsFlag, format string) error {
+	dbURL string, allowNoDB bool, migrationsFlag, format, addr string) error {
 
 	out := cmd.OutOrStdout()
 
@@ -202,6 +208,20 @@ func runScan(ctx context.Context, cmd *cobra.Command, g *globalFlags,
 		fmt.Fprintf(out, "\n(could not write report: %v)\n", err)
 	} else {
 		fmt.Fprintf(out, "\nreport: %s  (open in a browser)\n", reportPath)
+	}
+
+	// Spin up the interactive dashboard so a scan is one command, not three.
+	// It blocks until Ctrl-C; machine formats returned above, so CI is
+	// unaffected. The signal context lets Ctrl-C shut the server down cleanly.
+	// The scan has already succeeded and been persisted, so a dashboard that
+	// cannot start (e.g. the port is taken) is reported but does not fail the
+	// scan — the exit code must reflect the analysis, not the viewer.
+	fmt.Fprintln(out)
+	sctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := serveDashboard(sctx, out, store, stored.ID, scan, stored.Name, addr); err != nil {
+		fmt.Fprintf(out, "(dashboard not started: %v)\n"+
+			"The scan succeeded — run `pathwise serve` to view it, or `pathwise report` for the static page.\n", err)
 	}
 	return nil
 }
@@ -414,6 +434,22 @@ func analyzeFindings(scanID string, prog *ssa.Program, cg *callgraph.Graph, rout
 		}
 		found = append(found, findings.ResponseScope(scanID, ep, handler, tablesRead, cfg, ginadapter.ResponseBody)...)
 
+		// Response fields the handler serializes — what the endpoint returns to
+		// the client, recorded beside the tables it reads.
+		if handler != nil {
+			if rf := findings.ResponseFields(handler, ginadapter.ResponseBody); len(rf) > 0 {
+				if pos := prog.Fset.Position(handler.Pos()); pos.Filename != "" {
+					facts = append(facts, model.Fact{
+						ScanID:   scanID,
+						Kind:     model.FactResponseField,
+						Subject:  ep + " :: response",
+						Attrs:    map[string]any{"endpoint": ep, "fields": rf},
+						Evidence: model.CodeConfirmed("serialized response struct fields", model.SourceLocation{File: pos.Filename, StartLine: pos.Line, EndLine: pos.Line}),
+					})
+				}
+			}
+		}
+
 		// missing_ownership_check (IDOR): over the queries reachable from the
 		// handler alone (not its auth middleware), gated to authenticated
 		// endpoints, with the schema's keys and whether an ownership guard
@@ -491,13 +527,34 @@ func dataAccessFacts(scanID string, routes []ginadapter.Route, access map[string
 	dynamicEndpoints := 0
 	for _, r := range routes {
 		acc := access[r.Subject()]
+		cols := analyzer.ColumnsByTable(acc)
 		for table, ops := range acc.Tables {
 			tablesTouched[table] = true
+			attrs := map[string]any{"endpoint": r.Subject(), "table": table, "operations": ops}
+			// Per-table field access, with the honest markers from attribution
+			// (star = SELECT *, ambiguous = multi-table column it could not pin).
+			if tc := cols[strings.ToLower(table)]; tc != nil {
+				if len(tc.Read) > 0 {
+					attrs["read_columns"] = tc.Read
+				}
+				if len(tc.Filter) > 0 {
+					attrs["filter_columns"] = tc.Filter
+				}
+				if len(tc.Write) > 0 {
+					attrs["write_columns"] = tc.Write
+				}
+				if tc.Star {
+					attrs["columns_star"] = true
+				}
+				if tc.Ambiguous {
+					attrs["columns_ambiguous"] = true
+				}
+			}
 			facts = append(facts, model.Fact{
 				ScanID:   scanID,
 				Kind:     model.FactQuery,
 				Subject:  r.Subject() + " -> " + table,
-				Attrs:    map[string]any{"endpoint": r.Subject(), "table": table, "operations": ops},
+				Attrs:    attrs,
 				Evidence: model.Inferred("table reached from the endpoint (pg_query_go parse)"),
 			})
 		}

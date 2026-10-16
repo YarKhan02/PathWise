@@ -26,8 +26,9 @@ export function Database({
             <thead>
               <tr>
                 <th>Table</th>
+                <th style={{ width: 90 }}>Columns</th>
                 <th style={{ width: 160 }}>Operations</th>
-                <th style={{ width: 140 }}>Endpoints</th>
+                <th style={{ width: 120 }}>Endpoints</th>
               </tr>
             </thead>
             <tbody>
@@ -36,12 +37,13 @@ export function Database({
                   className={selection?.kind === "table" && selection.name === t.name ? "sel" : ""}
                   onClick={() => onSelect({ kind: "table", name: t.name })}>
                   <td><span className="route">{t.name}</span></td>
+                  <td style={{ color: "var(--muted)" }}>{t.columns.length || "—"}</td>
                   <td><div className="cellwrap">{t.operations.map((o) => <span className="chip" key={o}>{o.toLowerCase()}</span>)}</div></td>
                   <td style={{ color: "var(--muted)" }}>{t.endpoints.length}</td>
                 </tr>
               ))}
               {rows.length === 0 && (
-                <tr><td colSpan={3}><div style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>No tables match “{query}”.</div></td></tr>
+                <tr><td colSpan={4}><div style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>No tables match “{query}”.</div></td></tr>
               )}
             </tbody>
           </table>

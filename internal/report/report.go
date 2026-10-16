@@ -18,8 +18,9 @@ type Report struct {
 	GeneratedAt  string
 
 	Endpoints []Endpoint
-	Roles     []string // every role demanded by a gate, sorted
-	Tables    []string // every table reached, sorted
+	Roles     []string      // every role demanded by a gate, sorted
+	Tables    []string      // every table reached, sorted
+	Schema    []TableSchema // the database schema (columns + types), sorted by table
 
 	RouteCount      int
 	TableCount      int
@@ -30,18 +31,19 @@ type Report struct {
 
 // Endpoint is one route and everything known about what it exposes.
 type Endpoint struct {
-	Method      string
-	Path        string
-	Subject     string
-	Handler     string
-	HandlerFile string
-	HandlerLine int
-	Roles       []string
-	Middleware  []MiddlewareRef
-	Checks      []CheckRef
-	Resources   []Resource
-	Unresolved  bool
-	Findings    []model.Finding
+	Method         string
+	Path           string
+	Subject        string
+	Handler        string
+	HandlerFile    string
+	HandlerLine    int
+	Roles          []string
+	Middleware     []MiddlewareRef
+	Checks         []CheckRef
+	Resources      []Resource
+	ResponseFields []string // JSON fields the handler serializes to the client
+	Unresolved     bool
+	Findings       []model.Finding
 }
 
 // MiddlewareRef is one middleware in an endpoint's chain, with the constant
@@ -60,17 +62,44 @@ type CheckRef struct {
 	Line        int
 }
 
-// Resource is a table an endpoint reaches and the operations it performs on it.
+// Resource is a table an endpoint reaches, the operations it performs on it,
+// and the columns it reads, filters on and writes. Star and Ambiguous are the
+// honest markers from column attribution: Star means a SELECT * read all
+// columns, Ambiguous means a multi-table query referenced columns that could
+// not be pinned to this table.
 type Resource struct {
-	Table      string
-	Operations []string
+	Table         string
+	Operations    []string
+	ReadColumns   []string
+	FilterColumns []string
+	WriteColumns  []string
+	Star          bool
+	Ambiguous     bool
+}
+
+// TableSchema is one table's shape for the database view: its columns in
+// declaration order, with their types.
+type TableSchema struct {
+	Name    string
+	Columns []ColumnSchema
+}
+
+// ColumnSchema is one column's name, type and whether it is nullable or part of
+// the primary key. ForeignKey, when set, is the "table.column" this column
+// references.
+type ColumnSchema struct {
+	Name       string
+	Type       string
+	Nullable   bool
+	PrimaryKey bool
+	ForeignKey string
 }
 
 // Build assembles a report from a scan's route, middleware and query facts plus
 // its findings. It takes facts rather than the store so it stays a pure
 // projection, testable without a database.
 func Build(project, scanID, schemaSource, generatedAt string,
-	routes, middleware, queries, authChecks []model.Fact, findings []model.Finding) *Report {
+	routes, middleware, queries, authChecks, tables, columns, responses, foreignKeys []model.Fact, findings []model.Finding) *Report {
 
 	r := &Report{Project: project, ScanID: scanID, SchemaSource: schemaSource, GeneratedAt: generatedAt}
 
@@ -155,8 +184,23 @@ func Build(project, scanID, schemaSource, generatedAt string,
 		if table == "" {
 			continue
 		}
-		ep.Resources = append(ep.Resources, Resource{Table: table, Operations: attrStrings(f.Attrs, "operations")})
+		ep.Resources = append(ep.Resources, Resource{
+			Table:         table,
+			Operations:    attrStrings(f.Attrs, "operations"),
+			ReadColumns:   attrStrings(f.Attrs, "read_columns"),
+			FilterColumns: attrStrings(f.Attrs, "filter_columns"),
+			WriteColumns:  attrStrings(f.Attrs, "write_columns"),
+			Star:          attrBool(f.Attrs, "columns_star"),
+			Ambiguous:     attrBool(f.Attrs, "columns_ambiguous"),
+		})
 		tableSet[table] = true
+	}
+
+	// Response fields the handler serializes, per endpoint.
+	for _, f := range responses {
+		if ep := bySubject[attrStr(f.Attrs, "endpoint")]; ep != nil {
+			ep.ResponseFields = attrStrings(f.Attrs, "fields")
+		}
 	}
 
 	for _, f := range findings {
@@ -173,6 +217,7 @@ func Build(project, scanID, schemaSource, generatedAt string,
 	}
 	sort.Slice(r.Endpoints, func(i, j int) bool { return r.Endpoints[i].Subject < r.Endpoints[j].Subject })
 
+	r.Schema = buildSchema(tables, columns, foreignKeys)
 	r.Roles = sortedKeys(roleSet)
 	r.Tables = sortedKeys(tableSet)
 	r.RouteCount = len(r.Endpoints)
@@ -180,6 +225,52 @@ func Build(project, scanID, schemaSource, generatedAt string,
 	r.RoleCount = len(r.Roles)
 	r.FindingCount = len(findings)
 	return r
+}
+
+// buildSchema assembles the table-by-table column view from the schema facts:
+// FactTable carries each table's column order and primary key, FactColumn each
+// column's type and nullability (subject "table.column").
+func buildSchema(tables, columns, foreignKeys []model.Fact) []TableSchema {
+	type colMeta struct {
+		typ      string
+		nullable bool
+	}
+	meta := map[string]colMeta{} // "table.column" -> type/nullable
+	for _, f := range columns {
+		meta[f.Subject] = colMeta{typ: attrStr(f.Attrs, "type"), nullable: attrBool(f.Attrs, "nullable")}
+	}
+	fkRef := map[string]string{} // "from_table.from_column" -> "to_table.to_column"
+	for _, f := range foreignKeys {
+		from := attrStr(f.Attrs, "from_table") + "." + attrStr(f.Attrs, "from_column")
+		fkRef[from] = attrStr(f.Attrs, "to_table") + "." + attrStr(f.Attrs, "to_column")
+	}
+
+	var out []TableSchema
+	for _, f := range tables {
+		ts := TableSchema{Name: f.Subject}
+		pk := map[string]bool{}
+		for _, c := range attrStrings(f.Attrs, "primary_key") {
+			pk[c] = true
+		}
+		for _, name := range attrStrings(f.Attrs, "columns") {
+			m := meta[f.Subject+"."+name]
+			ts.Columns = append(ts.Columns, ColumnSchema{
+				Name: name, Type: m.typ, Nullable: m.nullable, PrimaryKey: pk[name],
+				ForeignKey: fkRef[f.Subject+"."+name],
+			})
+		}
+		out = append(out, ts)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+func attrBool(attrs map[string]any, key string) bool {
+	if attrs == nil {
+		return false
+	}
+	b, _ := attrs[key].(bool)
+	return b
 }
 
 func attrStr(attrs map[string]any, key string) string {

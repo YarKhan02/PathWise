@@ -27,6 +27,24 @@ type Query struct {
 	// EqPredicates are the equality predicates `column = value` in WHERE, which
 	// is where ownership and tenancy are (or are not) enforced.
 	EqPredicates []EqPredicate
+
+	// ReadColumns are the columns a SELECT projects (its target list), and
+	// WriteColumns the columns an INSERT or UPDATE writes. Each carries the
+	// qualifier it was written with (u.id → Table "u"), which may be a table
+	// name or an alias, or "" when unqualified.
+	ReadColumns  []ColumnRef
+	WriteColumns []ColumnRef
+
+	// Star is set when the projection is `SELECT *` (or `t.*`): the exact
+	// columns read cannot be known from the query alone.
+	Star bool
+}
+
+// ColumnRef is a column reference with the qualifier it was written with. Table
+// is the text before the dot (a table name or an alias) or "" when unqualified.
+type ColumnRef struct {
+	Table string
+	Name  string
 }
 
 // EqPredicate is one `column = value` comparison in a WHERE clause. Param is
@@ -67,11 +85,14 @@ func Parse(sql string) (*Query, error) {
 		q.Operation = "SELECT"
 		q.collectTables(s.FromClause)
 		q.walkWhere(s.WhereClause)
+		q.collectReadColumns(s.TargetList)
 	case stmt.GetInsertStmt() != nil:
+		ins := stmt.GetInsertStmt()
 		q.Operation = "INSERT"
-		if r := stmt.GetInsertStmt().Relation; r != nil {
+		if r := ins.Relation; r != nil {
 			q.Tables = append(q.Tables, r.Relname)
 		}
+		q.collectWriteColumns(ins.Cols)
 	case stmt.GetUpdateStmt() != nil:
 		u := stmt.GetUpdateStmt()
 		q.Operation = "UPDATE"
@@ -79,6 +100,7 @@ func Parse(sql string) (*Query, error) {
 			q.Tables = append(q.Tables, u.Relation.Relname)
 		}
 		q.walkWhere(u.WhereClause)
+		q.collectWriteColumns(u.TargetList)
 	case stmt.GetDeleteStmt() != nil:
 		d := stmt.GetDeleteStmt()
 		q.Operation = "DELETE"
@@ -143,6 +165,70 @@ func (q *Query) walkWhere(n *pg.Node) {
 	if c := columnName(n); c != "" {
 		q.WhereColumns = append(q.WhereColumns, c)
 	}
+}
+
+// collectReadColumns reads a SELECT target list into ReadColumns, setting Star
+// when the projection is `*` or `t.*`. Non-column targets (function calls,
+// literals, expressions) are skipped — they name no single column to attribute.
+func (q *Query) collectReadColumns(targets []*pg.Node) {
+	for _, n := range targets {
+		rt := n.GetResTarget()
+		if rt == nil || rt.Val == nil {
+			continue
+		}
+		cr := rt.Val.GetColumnRef()
+		if cr == nil {
+			continue
+		}
+		ref, star := parseColumnRef(cr)
+		if star {
+			q.Star = true
+			continue
+		}
+		if ref.Name != "" {
+			q.ReadColumns = append(q.ReadColumns, ref)
+		}
+	}
+}
+
+// collectWriteColumns reads the column list of an INSERT or the SET targets of
+// an UPDATE; each ResTarget.Name is a column of the statement's single target
+// table, so these are unqualified.
+func (q *Query) collectWriteColumns(targets []*pg.Node) {
+	for _, n := range targets {
+		rt := n.GetResTarget()
+		if rt == nil || rt.Name == "" {
+			continue
+		}
+		q.WriteColumns = append(q.WriteColumns, ColumnRef{Name: strings.ToLower(rt.Name)})
+	}
+}
+
+// parseColumnRef splits a ColumnRef into its qualifier and name, and reports a
+// star projection (`*` or `t.*`). A qualified `u.id` yields Table "u", Name
+// "id"; a bare `id` yields Name "id".
+func parseColumnRef(cr *pg.ColumnRef) (ref ColumnRef, star bool) {
+	fields := cr.Fields
+	if len(fields) == 0 {
+		return ref, false
+	}
+	if fields[len(fields)-1].GetAStar() != nil {
+		if len(fields) >= 2 {
+			if s := fields[len(fields)-2].GetString_(); s != nil {
+				ref.Table = strings.ToLower(s.Sval)
+			}
+		}
+		return ref, true
+	}
+	if s := fields[len(fields)-1].GetString_(); s != nil {
+		ref.Name = strings.ToLower(s.Sval)
+	}
+	if len(fields) >= 2 {
+		if s := fields[len(fields)-2].GetString_(); s != nil {
+			ref.Table = strings.ToLower(s.Sval)
+		}
+	}
+	return ref, false
 }
 
 // columnName returns the (unqualified) column a node references, or "" if it is

@@ -30,6 +30,18 @@ type Scan struct {
 	// findings and never merged with them.
 	RuntimeTests    []RuntimeTest `json:"runtimeTests"`
 	RuntimeTestedAt string        `json:"runtimeTestedAt,omitempty"`
+	// History is every runtime run recorded for this project, newest first — the
+	// durable record the Scan History page shows. Bodies are never stored, so
+	// history carries outcomes only.
+	History []TestRun `json:"history"`
+}
+
+// TestRun is one recorded runtime run (a batch) for the history list.
+type TestRun struct {
+	ScanID     string        `json:"scanId"`
+	ExecutedAt string        `json:"executedAt"`
+	Revision   string        `json:"revision,omitempty"`
+	Results    []RuntimeTest `json:"results"`
 }
 
 // RuntimeTest is one scenario's observed outcome, projected for the dashboard.
@@ -42,6 +54,9 @@ type RuntimeTest struct {
 	Outcome     string `json:"outcome"`     // pass | fail | blocked | unverified | divergent
 	Status      int    `json:"status,omitempty"`
 	Detail      string `json:"detail"`
+	// Body is the live response preview; present only for a run just executed
+	// through the dashboard, never for a run read back from the store.
+	Body string `json:"body,omitempty"`
 }
 
 // Counts are the headline numbers for the overview.
@@ -56,18 +71,19 @@ type Counts struct {
 
 // Endpoint is one API route and everything the scan established about it.
 type Endpoint struct {
-	ID          string          `json:"id"`
-	Method      string          `json:"method"`
-	Path        string          `json:"path"`
-	Handler     string          `json:"handler"`
-	HandlerFile string          `json:"handlerFile,omitempty"`
-	HandlerLine int             `json:"handlerLine,omitempty"`
-	Roles       []string        `json:"roles"`
-	Middleware  []Middleware    `json:"middleware"`
-	Checks      []Check         `json:"checks"`
-	Tables      []TableRef      `json:"tables"`
-	Unresolved  bool            `json:"unresolved"`
-	Findings    []model.Finding `json:"findings"`
+	ID             string          `json:"id"`
+	Method         string          `json:"method"`
+	Path           string          `json:"path"`
+	Handler        string          `json:"handler"`
+	HandlerFile    string          `json:"handlerFile,omitempty"`
+	HandlerLine    int             `json:"handlerLine,omitempty"`
+	Roles          []string        `json:"roles"`
+	Middleware     []Middleware    `json:"middleware"`
+	Checks         []Check         `json:"checks"`
+	Tables         []TableRef      `json:"tables"`
+	ResponseFields []string        `json:"responseFields"`
+	Unresolved     bool            `json:"unresolved"`
+	Findings       []model.Finding `json:"findings"`
 }
 
 // Middleware is one gate in an endpoint's chain; Args carries string literals
@@ -87,18 +103,37 @@ type Check struct {
 	Line        int    `json:"line,omitempty"`
 }
 
-// TableRef is a table an endpoint reaches with the operations it performs.
+// TableRef is a table an endpoint reaches: the operations it performs and the
+// columns it reads, filters on and writes. Star marks a SELECT * (read is "all
+// columns"); Ambiguous marks a multi-table query whose columns could not be
+// pinned to this table.
 type TableRef struct {
-	Table      string   `json:"table"`
-	Operations []string `json:"operations"`
+	Table         string   `json:"table"`
+	Operations    []string `json:"operations"`
+	ReadColumns   []string `json:"readColumns"`
+	FilterColumns []string `json:"filterColumns"`
+	WriteColumns  []string `json:"writeColumns"`
+	Star          bool     `json:"star"`
+	Ambiguous     bool     `json:"ambiguous"`
 }
 
 // TableInfo is a table and the endpoints that reach it — the reverse edges for
-// the database view.
+// the database view — plus its columns from the schema.
 type TableInfo struct {
-	Name       string   `json:"name"`
-	Endpoints  []string `json:"endpoints"`
-	Operations []string `json:"operations"`
+	Name       string       `json:"name"`
+	Endpoints  []string     `json:"endpoints"`
+	Operations []string     `json:"operations"`
+	Columns    []ColumnInfo `json:"columns"`
+}
+
+// ColumnInfo is one column's shape for the database view. ForeignKey, when set,
+// is the "table.column" this column references.
+type ColumnInfo struct {
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	Nullable   bool   `json:"nullable"`
+	PrimaryKey bool   `json:"primaryKey"`
+	ForeignKey string `json:"foreignKey,omitempty"`
 }
 
 // BuildScan projects a report into the dashboard contract.
@@ -113,6 +148,7 @@ func BuildScan(r *report.Report) Scan {
 		Endpoints:    []Endpoint{},
 		Tables:       []TableInfo{},
 		RuntimeTests: []RuntimeTest{},
+		History:      []TestRun{},
 		Counts: Counts{
 			Endpoints: r.RouteCount, Roles: r.RoleCount, Tables: r.TableCount,
 			Findings: r.FindingCount, Unresolved: r.UnresolvedCount,
@@ -129,7 +165,8 @@ func BuildScan(r *report.Report) Scan {
 			HandlerFile: e.HandlerFile, HandlerLine: e.HandlerLine,
 			Roles: nonNil(e.Roles), Unresolved: e.Unresolved,
 			Middleware: []Middleware{}, Checks: []Check{}, Tables: []TableRef{},
-			Findings: nonNilFindings(e.Findings),
+			ResponseFields: nonNil(e.ResponseFields),
+			Findings:       nonNilFindings(e.Findings),
 		}
 		for _, m := range e.Middleware {
 			ep.Middleware = append(ep.Middleware, Middleware{Name: m.Name, Args: m.Args})
@@ -141,7 +178,11 @@ func BuildScan(r *report.Report) Scan {
 			})
 		}
 		for _, res := range e.Resources {
-			ep.Tables = append(ep.Tables, TableRef{Table: res.Table, Operations: nonNil(res.Operations)})
+			ep.Tables = append(ep.Tables, TableRef{
+				Table: res.Table, Operations: nonNil(res.Operations),
+				ReadColumns: nonNil(res.ReadColumns), FilterColumns: nonNil(res.FilterColumns),
+				WriteColumns: nonNil(res.WriteColumns), Star: res.Star, Ambiguous: res.Ambiguous,
+			})
 			if tableEndpoints[res.Table] == nil {
 				tableEndpoints[res.Table] = map[string]bool{}
 				tableOps[res.Table] = map[string]bool{}
@@ -158,11 +199,27 @@ func BuildScan(r *report.Report) Scan {
 		}
 	}
 
+	// Columns per table from the schema, so each reached table can show its
+	// fields and their types.
+	colsByTable := map[string][]ColumnInfo{}
+	for _, t := range r.Schema {
+		cis := make([]ColumnInfo, 0, len(t.Columns))
+		for _, c := range t.Columns {
+			cis = append(cis, ColumnInfo{Name: c.Name, Type: c.Type, Nullable: c.Nullable, PrimaryKey: c.PrimaryKey, ForeignKey: c.ForeignKey})
+		}
+		colsByTable[t.Name] = cis
+	}
+
 	for _, name := range r.Tables {
+		cols := colsByTable[name]
+		if cols == nil {
+			cols = []ColumnInfo{}
+		}
 		s.Tables = append(s.Tables, TableInfo{
 			Name:       name,
 			Endpoints:  sortedSet(tableEndpoints[name]),
 			Operations: sortedSet(tableOps[name]),
+			Columns:    cols,
 		})
 	}
 	return s

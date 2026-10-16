@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/types"
 	"reflect"
+	"sort"
 	"strings"
 
 	"golang.org/x/tools/go/ssa"
@@ -87,6 +88,40 @@ func ResponseScope(scanID, endpoint string, handler *ssa.Function, tablesRead []
 			}
 		}
 	}
+	return out
+}
+
+// ResponseFields returns the sorted, de-duplicated set of JSON field names a
+// handler serializes across every response body it writes. It reuses the same
+// struct-field reading as the scope finding, so the dashboard can show what an
+// endpoint returns, not only which tables it reads. bodyOf extracts the
+// serialized value from a framework response call, keeping this
+// framework-agnostic.
+func ResponseFields(handler *ssa.Function, bodyOf func(*ssa.Call) (ssa.Value, bool)) []string {
+	if handler == nil {
+		return nil
+	}
+	set := map[string]bool{}
+	for _, b := range handler.Blocks {
+		for _, instr := range b.Instrs {
+			call, ok := instr.(*ssa.Call)
+			if !ok {
+				continue
+			}
+			body, ok := bodyOf(call)
+			if !ok {
+				continue
+			}
+			for f := range jsonFields(body) {
+				set[f] = true
+			}
+		}
+	}
+	out := make([]string, 0, len(set))
+	for f := range set {
+		out = append(out, f)
+	}
+	sort.Strings(out)
 	return out
 }
 
