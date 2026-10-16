@@ -3,7 +3,9 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -18,10 +20,19 @@ type globalFlags struct {
 }
 
 func (g *globalFlags) resolveStorePath(projectRoot string) string {
-	if g.storePath != "" {
-		return g.storePath
+	if g.storePath == "" {
+		return filepath.Join(projectRoot, ".pathwise", "pathwise.db")
 	}
-	return filepath.Join(projectRoot, ".pathwise", "pathwise.db")
+	// A directory (trailing slash, or an existing dir) is taken as the store's
+	// home and the db file placed inside it. SQLite given a directory fails to
+	// open it with a cryptic "out of memory" (CANTOPEN), so handle it here.
+	if strings.HasSuffix(g.storePath, string(os.PathSeparator)) {
+		return filepath.Join(g.storePath, "pathwise.db")
+	}
+	if info, err := os.Stat(g.storePath); err == nil && info.IsDir() {
+		return filepath.Join(g.storePath, "pathwise.db")
+	}
+	return g.storePath
 }
 
 // NewRootCommand builds the command tree.

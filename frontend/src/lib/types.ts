@@ -38,6 +38,11 @@ export interface Check {
 export interface TableRef {
   table: string;
   operations: string[];
+  readColumns: string[];
+  filterColumns: string[];
+  writeColumns: string[];
+  star: boolean;
+  ambiguous: boolean;
 }
 
 export interface Endpoint {
@@ -51,14 +56,24 @@ export interface Endpoint {
   middleware: Middleware[];
   checks: Check[];
   tables: TableRef[];
+  responseFields: string[];
   unresolved: boolean;
   findings: Finding[];
+}
+
+export interface ColumnInfo {
+  name: string;
+  type: string;
+  nullable: boolean;
+  primaryKey: boolean;
+  foreignKey?: string;
 }
 
 export interface TableInfo {
   name: string;
   endpoints: string[];
   operations: string[];
+  columns: ColumnInfo[];
 }
 
 export interface Counts {
@@ -81,6 +96,14 @@ export interface RuntimeTest {
   outcome: RuntimeOutcome;
   status?: number;
   detail: string;
+  body?: string;
+}
+
+export interface TestRun {
+  scanId: string;
+  executedAt: string;
+  revision?: string;
+  results: RuntimeTest[];
 }
 
 export interface Scan {
@@ -95,4 +118,5 @@ export interface Scan {
   findings: Finding[];
   runtimeTests: RuntimeTest[];
   runtimeTestedAt?: string;
+  history: TestRun[];
 }

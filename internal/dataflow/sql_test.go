@@ -67,6 +67,46 @@ func TestParseCorpusQueries(t *testing.T) {
 	}
 }
 
+func TestReadWriteColumns(t *testing.T) {
+	colNames := func(refs []ColumnRef) []string {
+		out := make([]string, len(refs))
+		for i, r := range refs {
+			out[i] = r.Name
+		}
+		return out
+	}
+
+	// SELECT projects read columns.
+	q, _ := Parse("SELECT id, name, email FROM students WHERE id = $1")
+	if got := colNames(q.ReadColumns); !reflect.DeepEqual(got, []string{"id", "name", "email"}) {
+		t.Errorf("read columns = %v, want [id name email]", got)
+	}
+	if q.Star {
+		t.Error("SELECT of named columns must not set Star")
+	}
+
+	// SELECT * is honest: Star set, no named read columns.
+	q, _ = Parse("SELECT * FROM students WHERE id = $1")
+	if !q.Star || len(q.ReadColumns) != 0 {
+		t.Errorf("SELECT *: star=%v read=%v, want star=true read=[]", q.Star, q.ReadColumns)
+	}
+
+	// INSERT records written columns, not a star.
+	q, _ = Parse("INSERT INTO sessions (user_id, token, expires_at) VALUES ($1,$2,$3)")
+	if got := colNames(q.WriteColumns); !reflect.DeepEqual(got, []string{"user_id", "token", "expires_at"}) {
+		t.Errorf("insert write columns = %v, want [user_id token expires_at]", got)
+	}
+
+	// UPDATE records SET targets as writes and keeps the WHERE column as filter.
+	q, _ = Parse("UPDATE students SET name = $1 WHERE id = $2")
+	if got := colNames(q.WriteColumns); !reflect.DeepEqual(got, []string{"name"}) {
+		t.Errorf("update write columns = %v, want [name]", got)
+	}
+	if !q.HasWhereColumn("id") {
+		t.Errorf("update WHERE should reference id, got %v", q.WhereColumns)
+	}
+}
+
 func TestDynamicSQLUnparsable(t *testing.T) {
 	// A fragment with an unquoted interpolation hole does not parse; the caller
 	// must treat that as dynamic_sql, so Parse must return an error.

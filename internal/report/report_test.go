@@ -33,7 +33,7 @@ func TestBuildAndRender(t *testing.T) {
 		},
 	}
 
-	rep := report.Build("demo", "scan1", "none", "now", routes, middleware, queries, nil, nil)
+	rep := report.Build("demo", "scan1", "none", "now", routes, middleware, queries, nil, nil, nil, nil, nil, nil)
 
 	if rep.RouteCount != 1 || rep.RoleCount != 1 || rep.TableCount != 1 || rep.UnresolvedCount != 1 {
 		t.Fatalf("counts: routes=%d roles=%d tables=%d unresolved=%d, want 1/1/1/1",

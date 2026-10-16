@@ -98,10 +98,30 @@ function EndpointInspector({ ep, scan, onClose }: { ep: Endpoint; scan: Scan; on
         <section className="isec">
           <h3>Data access</h3>
           {ep.tables.map((t) => (
-            <div className="evline" key={t.table}>
-              <span className="chip">{t.table} <span className="op">{t.operations.join(",")}</span></span>
+            <div className="dacc" key={t.table}>
+              <div className="dacc-head">
+                <span className="chip">{t.table} <span className="op">{t.operations.join(",")}</span></span>
+              </div>
+              <FieldRow label="reads" cols={t.readColumns} star={t.star} />
+              <FieldRow label="filters on" cols={t.filterColumns} />
+              <FieldRow label="writes" cols={t.writeColumns} />
+              {t.ambiguous && (
+                <div className="dacc-note">+ columns from a multi-table query that could not be attributed to this table</div>
+              )}
+              {!t.star && !t.ambiguous && !t.readColumns.length && !t.filterColumns.length && !t.writeColumns.length && (
+                <div className="dacc-note">specific fields not recovered{ep.unresolved ? " (endpoint has dynamic queries)" : ""}</div>
+              )}
             </div>
           ))}
+        </section>
+      )}
+
+      {ep.responseFields.length > 0 && (
+        <section className="isec">
+          <h3>Response fields <span style={{ color: "var(--muted)" }}>· {ep.responseFields.length}</span></h3>
+          <div className="cellwrap">
+            {ep.responseFields.map((f) => <span className="chip" key={f}>{f}</span>)}
+          </div>
         </section>
       )}
 
@@ -146,6 +166,27 @@ function TableInspector({
         </div>
       </div>
       <section className="isec">
+        <h3>Columns {table.columns.length > 0 && <span style={{ color: "var(--muted)" }}>· {table.columns.length}</span>}</h3>
+        {table.columns.length === 0 ? (
+          <div style={{ color: "var(--muted)", fontSize: 12.5 }}>
+            No columns recorded — this table was named by a query but is not in the read schema.
+          </div>
+        ) : (
+          <table className="coltable">
+            <tbody>
+              {table.columns.map((c) => (
+                <tr key={c.name}>
+                  <td className="mono">{c.name}{c.primaryKey && <span className="pk" title="primary key">PK</span>}</td>
+                  <td className="ctype">{c.type || "—"}</td>
+                  <td className="cnull">{c.nullable ? "null" : "not null"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section className="isec">
         <h3>Reached by {table.endpoints.length} endpoint{table.endpoints.length === 1 ? "" : "s"}</h3>
         {table.endpoints.map((id) => {
           const ep = scan.endpoints.find((e) => e.id === id);
@@ -157,6 +198,21 @@ function TableInspector({
           );
         })}
       </section>
+    </div>
+  );
+}
+
+// FieldRow shows one access kind's columns (reads / filters on / writes). A
+// SELECT * read is shown honestly as "all columns", never expanded to a guess.
+function FieldRow({ label, cols, star }: { label: string; cols: string[]; star?: boolean }) {
+  if (!cols.length && !star) return null;
+  return (
+    <div className="dacc-row">
+      <span className="dacc-label">{label}</span>
+      <div className="cellwrap">
+        {star && <span className="col star">all columns (SELECT *)</span>}
+        {cols.map((c) => <span className="col" key={c}>{c}</span>)}
+      </div>
     </div>
   );
 }

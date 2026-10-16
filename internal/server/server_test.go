@@ -24,7 +24,7 @@ func TestHandlerServesScanAndPage(t *testing.T) {
 			{Method: "POST", Path: "/login", Subject: "POST /login"},
 		},
 	}
-	h := server.Handler(server.BuildScan(rep))
+	h := server.Handler(server.BuildScan(rep), nil, nil)
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/scan", nil))
